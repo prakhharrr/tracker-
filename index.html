@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11,8 +12,8 @@ body{min-width:1200px;font-family:system-ui,sans-serif;margin:20px}
 @media (prefers-color-scheme: light){body{background:#fff;color:#000}.card,table,th,td{border-color:#000}}
 :root{--accent:#6aa6ff}
 h1{color:var(--accent)}
-.small{font-size:12px;opacity:.75}
-.card{border:1px solid;border-radius:14px;padding:14px;margin-top:20px}
+.small{font-size:12px;opacity:.7}
+.card{border:1px solid;border-radius:16px;padding:14px;margin-top:20px}
 table{width:100%;border-collapse:collapse;table-layout:fixed}
 th,td{border:1px solid;font-size:12px;text-align:center}
 th:first-child,td:first-child{width:180px;text-align:left;padding-left:8px}
@@ -26,7 +27,7 @@ button{margin-top:8px;padding:6px 12px;border:1px solid var(--accent);background
 .sleep-wrap{display:flex;gap:14px;margin-top:10px}
 .sleep-left{width:40%}
 .sleep-right{width:60%}
-svg{width:100%;height:160px}
+svg{width:100%;height:200px}
 </style>
 </head>
 
@@ -35,7 +36,6 @@ svg{width:100%;height:160px}
 <h1>🧠 Personal Tracker</h1>
 <div id="dateTime" class="small"></div>
 
-<!-- HABITS -->
 <div class="card">
 <b>Habits</b>
 <div id="todayProgress" class="small"></div>
@@ -43,7 +43,6 @@ svg{width:100%;height:160px}
 <button onclick="addHabit()">+ Add habit</button>
 </div>
 
-<!-- SLEEP -->
 <div class="card">
 <b>Sleep Tracker</b>
 <div class="sleep-wrap">
@@ -53,8 +52,8 @@ svg{width:100%;height:160px}
   <div class="sleep-right card">
     <div class="small">Daily Sleep (hrs)</div>
     <svg id="sleepGraph"></svg>
-    <div class="small" style="margin-top:10px">Weekly Breakdown</div>
-    <svg id="weeklyGraph"></svg>
+    <div class="small" style="margin-top:12px">Weekly Breakdown</div>
+    <svg id="weeklyGraph" style="height:240px"></svg>
   </div>
 </div>
 </div>
@@ -69,19 +68,15 @@ const KEY=`tracker-${Y}-${M}`;
 
 let data=JSON.parse(localStorage.getItem(KEY))||{
   habits:Array(5).fill().map(()=>({name:"",checks:{}})),
-  sleep:{} // { day: {start,end,hrs} }
+  sleep:{}
 };
 
 function save(){localStorage.setItem(KEY,JSON.stringify(data));render();}
 
-/* ---------------- HABITS (TODAY ONLY) ---------------- */
+/* ---------- HABITS ---------- */
 function addHabit(){data.habits.push({name:"",checks:{}});save();}
 function removeHabit(i){data.habits.splice(i,1);save();}
-function toggleHabit(i,d){
-  if(d!==TODAY)return;
-  data.habits[i].checks[d]=!data.habits[i].checks[d];
-  save();
-}
+function toggleHabit(i,d){if(d!==TODAY)return;data.habits[i].checks[d]=!data.habits[i].checks[d];save();}
 
 function renderHabits(){
   habitTable.innerHTML="";
@@ -90,8 +85,7 @@ function renderHabits(){
     const sep=new Date(Y,M,d).getDay()===0;
     h+=`<th class="${sep?'week-sep':''}">${d}</th>`;
   }
-  h+="</tr>";
-  habitTable.innerHTML=h;
+  habitTable.innerHTML=h+"</tr>";
 
   let done=0;
   data.habits.forEach((hb,i)=>{
@@ -107,13 +101,12 @@ function renderHabits(){
       r+=`<td class="cell ${isToday?'today':'locked'} ${sep?'week-sep':''}"
         onclick="toggleHabit(${i},${d})">${hb.checks[d]?'✔':''}</td>`;
     }
-    r+="</tr>";
-    habitTable.innerHTML+=r;
+    habitTable.innerHTML+=r+"</tr>";
   });
   todayProgress.innerText=`Today: ${done}/${data.habits.length}`;
 }
 
-/* ---------------- SLEEP ---------------- */
+/* ---------- SLEEP ---------- */
 function calcHours(s,e){
   if(!s||!e)return null;
   let a=new Date(`1970-01-01T${s}`);
@@ -126,7 +119,7 @@ function renderSleep(){
   sleepTable.innerHTML="<tr><th>Day</th><th>Slept</th><th>Woke</th><th>Hrs</th></tr>";
 
   let daily=[];
-  let weekly=[[],[],[],[],[]];
+  let weeks=[[],[],[],[],[]];
 
   for(let d=1;d<=DAYS;d++){
     const s=data.sleep[d]||{};
@@ -143,27 +136,27 @@ function renderSleep(){
 
     if(s.hrs!=null){
       daily.push({hrs:s.hrs,label:`${d} Jan`});
-      weekly[Math.floor((d-1)/7)].push({hrs:s.hrs,label:`${d} Jan`});
+      weeks[Math.floor((d-1)/7)].push({hrs:s.hrs,label:`${d} Jan`});
     }
   }
-
-  drawDailyGraph(daily);
-  drawWeeklyPies(weekly);
+  drawDaily(daily);
+  drawWeekly(weeks);
 }
 
-/* ---------------- DAILY GRAPH ---------------- */
-function drawDailyGraph(data){
+/* ---------- DAILY GRAPH ---------- */
+function drawDaily(data){
   sleepGraph.innerHTML="";
   if(!data.length)return;
-  const w=sleepGraph.clientWidth,h=sleepGraph.clientHeight,p=30;
+  const w=sleepGraph.clientWidth,h=sleepGraph.clientHeight,p=35;
   const max=Math.max(...data.map(d=>d.hrs),10);
 
   sleepGraph.innerHTML+=`
+    <text x="4" y="${p-10}" font-size="11">hrs</text>
+    <text x="${w/2-40}" y="${h-4}" font-size="11">date</text>
     <line x1="${p}" y1="${p}" x2="${p}" y2="${h-p}" stroke="currentColor"/>
     <line x1="${p}" y1="${h-p}" x2="${w-p}" y2="${h-p}" stroke="currentColor"/>
   `;
 
-  // goal line (8 hrs)
   const gy=h-p-(8/max)*(h-2*p);
   sleepGraph.innerHTML+=`<line x1="${p}" y1="${gy}" x2="${w-p}" y2="${gy}" stroke="red" stroke-dasharray="4"/>`;
 
@@ -178,18 +171,19 @@ function drawDailyGraph(data){
   pts.forEach(p=>sleepGraph.innerHTML+=`<circle cx="${p.x}" cy="${p.y}" r="3" fill="currentColor"/>`);
 }
 
-/* ---------------- WEEKLY PIE CHARTS ---------------- */
-function drawWeeklyPies(weeks){
+/* ---------- WEEKLY PIE ---------- */
+function drawWeekly(weeks){
   weeklyGraph.innerHTML="";
-  const size=110,r=40,cx=55,cy=55;
-  const colors=["#6aa6ff","#9cc2ff","#c4dbff","#88b4ff","#4f8cff","#b3ceff","#7aa2ff"];
+  const size=140,r=55,cx=70,cy=70;
+  const palette=["#6aa6ff","#9cc2ff","#c4dbff","#88b4ff","#4f8cff","#b3ceff","#7aa2ff"];
 
   weeks.forEach((week,wi)=>{
     if(!week.length)return;
     let total=week.reduce((a,b)=>a+b.hrs,0);
     let angle=0;
+
     const g=document.createElementNS("http://www.w3.org/2000/svg","g");
-    g.setAttribute("transform",`translate(${wi*(size+20)},0)`);
+    g.setAttribute("transform",`translate(${wi*(size+30)},0)`);
 
     week.forEach((d,i)=>{
       const slice=(d.hrs/total)*Math.PI*2;
@@ -200,17 +194,20 @@ function drawWeeklyPies(weeks){
 
       g.innerHTML+=`
       <path d="M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z"
-        fill="${colors[i%colors.length]}">
+        fill="${palette[i%palette.length]}">
         <title>${d.label}: ${d.hrs} hrs</title>
       </path>`;
     });
 
-    g.innerHTML+=`<text x="${cx-18}" y="${size-5}" font-size="10">Week ${wi+1}</text>`;
+    g.innerHTML+=`
+      <text x="${cx-30}" y="${size-6}" font-size="11">
+        Week ${wi+1} (${week[0].label} – ${week[week.length-1].label})
+      </text>`;
     weeklyGraph.appendChild(g);
   });
 }
 
-/* ---------------- CLOCK ---------------- */
+/* ---------- CLOCK ---------- */
 setInterval(()=>{
   dateTime.innerText=new Date().toLocaleDateString()+" "+
   new Date().toLocaleTimeString([],{
