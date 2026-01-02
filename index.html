@@ -327,19 +327,55 @@ render();/* ---------- MENU ACTIONS ---------- */
 
 // Recap
 document.getElementById("recapBtn").onclick = () => {
-  let habitDone = 0;
-  let habitTotal = data.habits.length;
 
-  data.habits.forEach(h=>{
-    if(h.checks[TODAY]) habitDone++;
+  /* ---- HABITS (only attempted days) ---- */
+  let habitDone = 0;
+  let habitPossible = 0;
+  let attemptedDays = new Set();
+
+  data.habits.forEach(habit => {
+    Object.keys(habit.checks).forEach(d => {
+      attemptedDays.add(Number(d));
+    });
   });
 
-  let sleepToday = data.sleep[TODAY]?.hrs ?? "No data";
+  attemptedDays.forEach(d => {
+    data.habits.forEach(habit => {
+      habitPossible++;
+      if(habit.checks[d]) habitDone++;
+    });
+  });
 
+  let habitPercent = habitPossible
+    ? ((habitDone / habitPossible) * 100)
+    : null;
+
+  /* ---- SLEEP (only entered days) ---- */
+  let sleepSum = 0;
+  let sleepDays = 0;
+
+  Object.values(data.sleep).forEach(s => {
+    if(s?.hrs != null){
+      sleepSum += s.hrs;
+      sleepDays++;
+    }
+  });
+
+  let avgSleep = sleepDays
+    ? (sleepSum / sleepDays)
+    : null;
+
+  /* ---- TREND LOGIC ---- */
+  let habitTrend = habitPercent != null && habitPercent > 70 ? "📈" : "📉";
+  let sleepTrend = avgSleep != null && avgSleep >= 7 ? "📈" : "📉";
+
+  /* ---- DISPLAY ---- */
   alert(
-    `📊 Recap (Today)\n\n` +
-    `Habits: ${habitDone}/${habitTotal}\n` +
-    `Sleep: ${sleepToday} hrs`
+    `📊 Live Recap (Available Data)\n\n` +
+    `Habits: ${habitPercent != null ? habitPercent.toFixed(1) : "No data"}% ${habitTrend}\n` +
+    `Avg Sleep: ${avgSleep != null ? avgSleep.toFixed(1) : "No data"} hrs ${sleepTrend}\n\n` +
+    `Habit days tracked: ${attemptedDays.size}\n` +
+    `Sleep days tracked: ${sleepDays}`
   );
 };
 
