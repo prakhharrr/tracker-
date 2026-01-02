@@ -2,249 +2,229 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=1200, initial-scale=0.35">
 <title>Personal Tracker</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <style>
-:root {
-  --bg:#000;
-  --fg:#fff;
-  --accent:#4da6ff;
-  --danger:#ff4d4d;
-}
-body {
-  margin:0;
-  background:var(--bg);
-  color:var(--fg);
-  font-family:system-ui, sans-serif;
-}
-h2 { color:var(--accent); margin:10px 0 }
-section {
-  border:1px solid #444;
-  border-radius:12px;
-  padding:12px;
-  margin:12px;
-}
-canvas { background:#000 }
-input, select, button {
-  background:#111;
-  color:#fff;
-  border:1px solid #444;
-  border-radius:6px;
-  padding:6px;
-}
-button { cursor:pointer }
-.small { font-size:12px; opacity:.7 }
-.flex { display:flex; gap:16px; flex-wrap:wrap }
+body{min-width:1200px;font-family:system-ui,sans-serif;margin:20px}
+@media (prefers-color-scheme: dark){body{background:#000;color:#fff}.card,table,th,td{border-color:#555}}
+@media (prefers-color-scheme: light){body{background:#fff;color:#000}.card,table,th,td{border-color:#000}}
+:root{--accent:#6aa6ff}
+h1{color:var(--accent)}
+.small{font-size:12px;opacity:.7}
+.card{border:1px solid;border-radius:16px;padding:14px;margin-top:20px}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+th,td{border:1px solid;font-size:12px;text-align:center}
+th:first-child,td:first-child{width:180px;text-align:left;padding-left:8px}
+td.cell{aspect-ratio:1/1;height:26px}
+td.today{cursor:pointer}
+td.locked{opacity:.35}
+.week-sep{border-right:2px solid}
+input.inline{width:100%;border:none;background:transparent;color:inherit;font-size:12px}
+.remove-btn{font-size:11px;margin-left:6px;cursor:pointer;opacity:.6}
+button{margin-top:8px;padding:6px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:8px}
+.sleep-wrap{display:flex;gap:14px;margin-top:10px}
+.sleep-left{width:40%}
+.sleep-right{width:60%}
+svg{width:100%;height:220px}
 </style>
 </head>
+
 <body>
 
-<section>
-<h2>Habits</h2>
-<div class="small">Click any box to toggle</div>
-<canvas id="habitGrid" width="1200" height="220"></canvas>
-</section>
+<h1>🧠 Personal Tracker</h1>
+<div id="clock" class="small"></div>
 
-<section>
-<h2>Sleep</h2>
-
-<div class="flex">
-  <div>
-    <label>Slept at</label><br>
-    <input type="time" id="sleepStart">
-  </div>
-  <div>
-    <label>Woke up at</label><br>
-    <input type="time" id="sleepEnd">
-  </div>
-  <div>
-    <label>Date</label><br>
-    <input type="date" id="sleepDate">
-  </div>
-  <div style="align-self:end">
-    <button onclick="saveSleep()">Save</button>
-  </div>
+<!-- HABITS -->
+<div class="card">
+<b>Habits</b>
+<div id="todayProgress" class="small"></div>
+<table id="habitTable"></table>
+<button onclick="addHabit()">+ Add habit</button>
 </div>
 
-<br>
+<!-- SLEEP -->
+<div class="card">
+<b>Sleep Tracker</b>
+<div class="sleep-wrap">
+  <div class="sleep-left">
+    <table id="sleepTable"></table>
+  </div>
+  <div class="sleep-right card">
+    <div class="small">Daily Sleep (hrs)</div>
+    <svg id="sleepGraph"></svg>
 
-<canvas id="sleepLine" width="1100" height="260"></canvas>
-
-<br>
-
-<div class="flex" id="pieContainer"></div>
-
-</section>
+    <div class="small" style="margin-top:14px">Weekly Breakdown</div>
+    <svg id="weeklyGraph" style="height:260px"></svg>
+  </div>
+</div>
+</div>
 
 <script>
-/* ---------- STORAGE ---------- */
-const store = (k,v)=>localStorage.setItem(k,JSON.stringify(v));
-const load = (k,d)=>JSON.parse(localStorage.getItem(k)||JSON.stringify(d));
+/* ---------- DATE SETUP ---------- */
+const now=new Date();
+const Y=now.getFullYear();
+const M=now.getMonth();
+const TODAY=now.getDate();
+const DAYS=new Date(Y,M+1,0).getDate();
+const KEY=`tracker-${Y}-${M}`;
 
-/* ---------- DATE HELPERS ---------- */
-const now = new Date();
-const year = now.getFullYear();
-const month = now.getMonth();
-const daysInMonth = new Date(year,month+1,0).getDate();
+/* ---------- DATA ---------- */
+let data=JSON.parse(localStorage.getItem(KEY))||{
+  habits:Array(5).fill().map(()=>({name:"",checks:{}})),
+  sleep:{}
+};
+function save(){localStorage.setItem(KEY,JSON.stringify(data));render();}
+
+/* ---------- CLOCK ---------- */
+setInterval(()=>{
+  clock.innerText=new Date().toLocaleDateString()+" "+
+  new Date().toLocaleTimeString([],{
+    hour:'numeric',minute:'2-digit',second:'2-digit',hour12:true
+  });
+},1000);
 
 /* ---------- HABITS ---------- */
-const habitCanvas = document.getElementById("habitGrid");
-const hctx = habitCanvas.getContext("2d");
-let habits = load("habits",Array(5).fill().map(()=>Array(daysInMonth).fill(false)));
+function addHabit(){data.habits.push({name:"",checks:{}});save();}
+function removeHabit(i){data.habits.splice(i,1);save();}
+function toggleHabit(i,d){data.habits[i].checks[d]=!data.habits[i].checks[d];save();}
 
-function drawHabits(){
-  hctx.clearRect(0,0,habitCanvas.width,habitCanvas.height);
-  const cell=28;
-  for(let d=0;d<daysInMonth;d++){
-    hctx.fillText(d+1,80+d*cell,20);
+function renderHabits(){
+  habitTable.innerHTML="";
+  let h="<tr><th>Habit</th>";
+  for(let d=1;d<=DAYS;d++){
+    const sep=new Date(Y,M,d).getDay()===0;
+    h+=`<th class="${sep?'week-sep':''}">${d}</th>`;
   }
-  habits.forEach((row,r)=>{
-    for(let d=0;d<daysInMonth;d++){
-      const x=80+d*cell,y=40+r*cell;
-      hctx.strokeRect(x,y,cell,cell);
-      if(row[d]){
-        hctx.fillText("✓",x+8,y+20);
-      }
+  habitTable.innerHTML=h+"</tr>";
+
+  let done=0;
+  data.habits.forEach((hb,i)=>{
+    let r=`<tr><td>
+      <input class="inline" value="${hb.name}" placeholder="Enter habit"
+        oninput="data.habits[${i}].name=this.value;save()">
+      <span class="remove-btn" onclick="removeHabit(${i})">×</span>
+    </td>`;
+    for(let d=1;d<=DAYS;d++){
+      const sep=new Date(Y,M,d).getDay()===0;
+      if(d===TODAY&&hb.checks[d])done++;
+      r+=`<td class="cell ${sep?'week-sep':''}"
+        onclick="toggleHabit(${i},${d})">${hb.checks[d]?'✔':''}</td>`;
     }
+    habitTable.innerHTML+=r+"</tr>";
   });
+  todayProgress.innerText=`Today: ${done}/${data.habits.length}`;
 }
-habitCanvas.onclick=e=>{
-  const rect=habitCanvas.getBoundingClientRect();
-  const x=e.clientX-rect.left-80;
-  const y=e.clientY-rect.top-40;
-  const d=Math.floor(x/28);
-  const r=Math.floor(y/28);
-  if(d>=0&&d<daysInMonth&&habits[r]){
-    habits[r][d]=!habits[r][d];
-    store("habits",habits);
-    drawHabits();
-  }
-};
-drawHabits();
 
-/* ---------- SLEEP DATA ---------- */
-let sleepData = load("sleepData",{});
-
+/* ---------- SLEEP ---------- */
 function calcHours(s,e){
-  let [sh,sm]=s.split(":").map(Number);
-  let [eh,em]=e.split(":").map(Number);
-  let start=sh+sm/60;
-  let end=eh+em/60;
-  if(end<start) end+=24;
-  return +(end-start).toFixed(1);
+  if(!s||!e)return null;
+  let a=new Date(`1970-01-01T${s}`);
+  let b=new Date(`1970-01-01T${e}`);
+  if(b<a)b.setDate(b.getDate()+1);
+  return +((b-a)/36e5).toFixed(1);
 }
 
-function saveSleep(){
-  const d=document.getElementById("sleepDate").value;
-  const s=document.getElementById("sleepStart").value;
-  const e=document.getElementById("sleepEnd").value;
-  if(!d||!s||!e) return;
-  sleepData[d]=calcHours(s,e);
-  store("sleepData",sleepData);
-  drawSleep();
-}
+function renderSleep(){
+  sleepTable.innerHTML="<tr><th>Day</th><th>Slept</th><th>Woke</th><th>Hrs</th></tr>";
+  let daily=[],weeks=[],wi=0;weeks[0]=[];
 
-/* ---------- LINE GRAPH ---------- */
-const line=document.getElementById("sleepLine");
-const lctx=line.getContext("2d");
-
-function drawSleep(){
-  lctx.clearRect(0,0,line.width,line.height);
-
-  const pad=50;
-  const maxH=12;
-  const step=(line.width-pad*2)/(daysInMonth-1);
-
-  // axes
-  lctx.strokeStyle="#888";
-  lctx.beginPath();
-  lctx.moveTo(pad,pad);
-  lctx.lineTo(pad,line.height-pad);
-  lctx.lineTo(line.width-pad,line.height-pad);
-  lctx.stroke();
-
-  // y labels
-  for(let h=6;h<=12;h++){
-    const y=line.height-pad-(h/maxH)*(line.height-pad*2);
-    lctx.fillText(h,pad-25,y+4);
-    lctx.strokeStyle="#222";
-    lctx.beginPath();lctx.moveTo(pad,y);lctx.lineTo(line.width-pad,y);lctx.stroke();
-  }
-
-  // goal line
-  const gy=line.height-pad-(8/maxH)*(line.height-pad*2);
-  lctx.strokeStyle="red";
-  lctx.setLineDash([5,5]);
-  lctx.beginPath();lctx.moveTo(pad,gy);lctx.lineTo(line.width-pad,gy);lctx.stroke();
-  lctx.setLineDash([]);
-  lctx.fillStyle="red";
-  lctx.fillText("Goal: 8 hrs",pad+5,gy-5);
-
-  // plot
-  lctx.strokeStyle="#fff";
-  lctx.beginPath();
-  let first=true;
-  for(let d=1;d<=daysInMonth;d++){
-    const key=`${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-    if(sleepData[key]){
-      const x=pad+(d-1)*step;
-      const y=line.height-pad-(sleepData[key]/maxH)*(line.height-pad*2);
-      first?lctx.moveTo(x,y):lctx.lineTo(x,y);
-      first=false;
-      lctx.fillRect(x-2,y-2,4,4);
+  for(let d=1;d<=DAYS;d++){
+    let date=new Date(Y,M,d);
+    if(date.getDay()===0&&d!==1){wi++;weeks[wi]=[]}
+    const s=data.sleep[d]||{};
+    sleepTable.innerHTML+=`
+    <tr>
+      <td>${d}</td>
+      <td><input type="time" class="inline" value="${s.start||""}"
+        onchange="data.sleep[${d}]={...data.sleep[${d}],start:this.value,hrs:calcHours(this.value,data.sleep[${d}]?.end)};save()"></td>
+      <td><input type="time" class="inline" value="${s.end||""}"
+        onchange="data.sleep[${d}]={...data.sleep[${d}],end:this.value,hrs:calcHours(data.sleep[${d}]?.start,this.value)};save()"></td>
+      <td><input type="number" step="0.1" class="inline" value="${s.hrs??""}"
+        oninput="data.sleep[${d}]={...data.sleep[${d}],hrs:Number(this.value)};save()"></td>
+    </tr>`;
+    if(s.hrs!=null){
+      daily.push({hrs:s.hrs,label:`${d} Jan`});
+      weeks[wi].push({hrs:s.hrs,label:`${d} Jan`});
     }
   }
-  lctx.stroke();
+  drawDaily(daily);
+  drawWeekly(weeks);
+}
 
-  // x labels
-  for(let d=1;d<=daysInMonth;d++){
-    const x=pad+(d-1)*step;
-    if(d%2===1) lctx.fillText(d,x-4,line.height-pad+15);
+/* ---------- DAILY GRAPH (FIXED) ---------- */
+function drawDaily(data){
+  sleepGraph.innerHTML="";
+  if(!data.length)return;
+  const w=sleepGraph.clientWidth,h=sleepGraph.clientHeight,p=40,max=10;
+
+  sleepGraph.innerHTML+=`<text x="10" y="${h/2}" font-size="11"
+    transform="rotate(-90 10 ${h/2})">Hours</text>`;
+
+  for(let i=5;i<=10;i++){
+    let y=h-p-(i/max)*(h-2*p);
+    sleepGraph.innerHTML+=`<text x="22" y="${y+4}" font-size="10">${i}</text>`;
   }
 
-  drawPies();
-}
-
-/* ---------- PIE CHARTS ---------- */
-function drawPies(){
-  const cont=document.getElementById("pieContainer");
-  cont.innerHTML="";
-  let week=[];
-  Object.entries(sleepData).forEach(([k,v])=>{
-    const day=new Date(k).getDate();
-    week.push({day,v});
-    if(new Date(k).getDay()===0){
-      makePie(week);
-      week=[];
-    }
-  });
-  if(week.length) makePie(week);
-}
-
-function makePie(data){
-  const avg=(data.reduce((a,b)=>a+b.v,0)/data.length).toFixed(1);
-  const c=document.createElement("canvas");
-  c.width=200;c.height=200;
-  const ctx=c.getContext("2d");
-  let ang=0;
-  const colors=["#4da6ff","#ffcc00","#ff6666","#66ff99","#9966ff","#00ffff","#ff9966"];
   data.forEach((d,i)=>{
-    const a=(d.v/24)*Math.PI*2;
-    ctx.fillStyle=colors[i%colors.length];
-    ctx.beginPath();
-    ctx.moveTo(100,100);
-    ctx.arc(100,100,90,ang,ang+a);
-    ctx.fill();
-    ang+=a;
+    let x=p+i*(w-2*p)/(data.length-1||1);
+    sleepGraph.innerHTML+=`<text x="${x-12}" y="${h-18}" font-size="10">${d.label}</text>`;
   });
-  ctx.fillStyle="#fff";
-  ctx.font="14px sans-serif";
-  ctx.textAlign="center";
-  ctx.fillText(`Avg ${avg}h`,100,105);
-  cont.appendChild(c);
+
+  sleepGraph.innerHTML+=`<text x="${w/2-15}" y="${h-2}" font-size="11">Date</text>`;
+
+  let gy=h-p-(8/max)*(h-2*p);
+  sleepGraph.innerHTML+=`<line x1="${p}" y1="${gy}" x2="${w-p}" y2="${gy}"
+    stroke="red" stroke-dasharray="4"/>`;
+
+  let pts=data.map((d,i)=>({
+    x:p+i*(w-2*p)/(data.length-1||1),
+    y:h-p-(d.hrs/max)*(h-2*p)
+  }));
+  sleepGraph.innerHTML+=`<polyline points="${pts.map(p=>`${p.x},${p.y}`).join(" ")}"
+    fill="none" stroke="currentColor"/>`;
+  pts.forEach(p=>sleepGraph.innerHTML+=`<circle cx="${p.x}" cy="${p.y}" r="3"/>`);
 }
 
-drawSleep();
+/* ---------- WEEKLY PIE (AVG ADDED) ---------- */
+function drawWeekly(weeks){
+  weeklyGraph.innerHTML="";
+  const size=150,r=55,cx=75,cy=75;
+  const colors=["#ff6b6b","#feca57","#48dbfb","#1dd1a1","#5f27cd","#54a0ff"];
+
+  weeks.forEach((week,wi)=>{
+    if(!week.length)return;
+    let total=week.reduce((a,b)=>a+b.hrs,0);
+    let avg=(total/week.length).toFixed(1);
+    let angle=0;
+
+    const g=document.createElementNS("http://www.w3.org/2000/svg","g");
+    g.setAttribute("transform",`translate(${wi*(size+30)},0)`);
+
+    week.forEach((d,i)=>{
+      let slice=(d.hrs/total)*Math.PI*2;
+      let x1=cx+r*Math.cos(angle),y1=cy+r*Math.sin(angle);
+      angle+=slice;
+      let x2=cx+r*Math.cos(angle),y2=cy+r*Math.sin(angle);
+      let large=slice>Math.PI?1:0;
+      g.innerHTML+=`<path d="M ${cx} ${cy} L ${x1} ${y1}
+        A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z"
+        fill="${colors[i%colors.length]}"/>`;
+    });
+
+    g.innerHTML+=`
+      <text x="${cx}" y="${cy-2}" text-anchor="middle" font-size="13">Avg</text>
+      <text x="${cx}" y="${cy+14}" text-anchor="middle" font-size="13">${avg}h</text>
+      <text x="${cx-55}" y="${size-6}" font-size="11">
+        Week ${wi+1} (${week[0].label} – ${week[week.length-1].label})
+      </text>`;
+    weeklyGraph.appendChild(g);
+  });
+}
+
+/* ---------- RENDER ---------- */
+function render(){renderHabits();renderSleep();}
+render();
 </script>
 
 </body>
