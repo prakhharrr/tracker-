@@ -1,93 +1,33 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-
-<!-- Force desktop-style layout -->
-<meta name="viewport" content="width=1200, initial-scale=0.35, maximum-scale=0.35, user-scalable=yes">
-
+<meta name="viewport" content="width=1200, initial-scale=0.35">
 <title>Personal Tracker</title>
-
-<!-- PWA -->
 <link rel="manifest" href="manifest.json">
 
 <style>
-body { min-width:1200px; font-family:system-ui,sans-serif; margin:20px; }
-
-@media (prefers-color-scheme: dark) {
-  body { background:#000; color:#fff; }
-  .card, table, th, td { border-color:#555; }
-}
-@media (prefers-color-scheme: light) {
-  body { background:#fff; color:#000; }
-  .card, table, th, td { border-color:#000; }
-}
-
-:root { --accent:#6aa6ff; }
-
-h1 { color:var(--accent); font-size:22px; }
-.small { font-size:12px; opacity:.75; }
-.section { margin-top:20px; }
-
-.card {
-  border:1px solid;
-  border-radius:14px;
-  padding:14px;
-}
-
-table {
-  width:100%;
-  border-collapse:collapse;
-  table-layout:fixed;
-}
-
-th, td {
-  border:1px solid;
-  font-size:12px;
-  text-align:center;
-}
-
-th:first-child, td:first-child {
-  width:180px;
-  text-align:left;
-  padding-left:8px;
-}
-
-td.cell { aspect-ratio:1/1; height:26px; }
-td.today { cursor:pointer; }
-td.locked { opacity:.35; }
-.week-sep { border-right:2px solid; }
-
-input.inline {
-  width:100%;
-  border:none;
-  background:transparent;
-  color:inherit;
-  font-size:12px;
-}
-
-.remove-btn {
-  font-size:11px;
-  margin-left:6px;
-  cursor:pointer;
-  opacity:.6;
-}
-
-button {
-  font-size:13px;
-  margin-top:8px;
-  padding:6px 12px;
-  border-radius:8px;
-  border:1px solid var(--accent);
-  background:transparent;
-  color:var(--accent);
-}
-
-.sleep-wrap { display:flex; gap:14px; margin-top:10px; }
-.sleep-left { width:35%; }
-.sleep-right { width:65%; }
-
-svg { width:100%; height:160px; }
+body{min-width:1200px;font-family:system-ui,sans-serif;margin:20px}
+@media (prefers-color-scheme: dark){body{background:#000;color:#fff}.card,table,th,td{border-color:#555}}
+@media (prefers-color-scheme: light){body{background:#fff;color:#000}.card,table,th,td{border-color:#000}}
+:root{--accent:#6aa6ff}
+h1{color:var(--accent)}
+.small{font-size:12px;opacity:.75}
+.card{border:1px solid;border-radius:14px;padding:14px;margin-top:20px}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+th,td{border:1px solid;font-size:12px;text-align:center}
+th:first-child,td:first-child{width:180px;text-align:left;padding-left:8px}
+td.cell{aspect-ratio:1/1;height:26px}
+td.today{cursor:pointer}
+td.locked{opacity:.35}
+.week-sep{border-right:2px solid}
+input.inline{width:100%;border:none;background:transparent;color:inherit}
+button{margin-top:8px;padding:6px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:8px}
+.sleep-wrap{display:flex;gap:14px;margin-top:10px}
+.sleep-left{width:35%}
+.sleep-right{width:65%}
+svg{width:100%;height:160px}
 </style>
 </head>
 
@@ -96,162 +36,141 @@ svg { width:100%; height:160px; }
 <h1>🧠 Personal Tracker</h1>
 <div id="dateTime" class="small"></div>
 
-<div class="section card">
-  <b>Habits</b>
-  <div id="todayProgress" class="small"></div>
-  <table id="habitTable"></table>
-  <button id="addHabitBtn">+ Add habit</button>
+<div class="card">
+<b>Habits</b>
+<div id="todayProgress" class="small"></div>
+<table id="habitTable"></table>
+<button onclick="addHabit()">+ Add habit</button>
 </div>
 
-<div class="section card">
-  <b>Sleep</b><br><br>
+<div class="card">
+<b>Sleep</b><br><br>
 
-  <label class="small">Slept at</label><br>
-  <input type="time" id="sleepStart"><br><br>
+<label class="small">Slept at</label><br>
+<input type="time" id="sleepStart"><br><br>
 
-  <label class="small">Woke up at</label><br>
-  <input type="time" id="sleepEnd"><br>
+<label class="small">Woke up at</label><br>
+<input type="time" id="sleepEnd"><br>
 
-  <button id="saveSleepBtn">Save</button>
-  <div id="sleepValue" class="small"></div>
+<button onclick="saveSleep()">Save</button>
+<div id="sleepValue" class="small"></div>
 
-  <div class="sleep-wrap">
-    <div class="sleep-left">
-      <table id="sleepTable"></table>
-    </div>
-    <div class="sleep-right card">
-      <div class="small">Sleep Trend</div>
-      <svg id="sleepGraph"></svg>
-    </div>
+<div class="sleep-wrap">
+  <div class="sleep-left">
+    <table id="sleepTable"></table>
+  </div>
+  <div class="sleep-right card">
+    <div class="small">Sleep Trend</div>
+    <svg id="sleepGraph"></svg>
   </div>
 </div>
-
-<div class="section">
-  <button id="recapBtn">Monthly Recap</button>
-  <div id="recap" class="small"></div>
 </div>
 
 <script>
-document.addEventListener("DOMContentLoaded", () => {
+const now=new Date();
+const Y=now.getFullYear();
+const M=now.getMonth();
+const TODAY=now.getDate();
+const DAYS=new Date(Y,M+1,0).getDate();
+const KEY=`tracker-${Y}-${M}`;
 
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("service-worker.js");
+let data=JSON.parse(localStorage.getItem(KEY))||{
+  habits:Array(5).fill().map(()=>({name:"",checks:{}})),
+  sleep:{}
+};
+
+function save(){localStorage.setItem(KEY,JSON.stringify(data));render();}
+
+function dateKey(d){
+  return `${Y}-${String(M+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+}
+
+/* -------- HABITS -------- */
+function addHabit(){data.habits.push({name:"",checks:{}});save();}
+function toggleHabit(i,d){data.habits[i].checks[d]=!data.habits[i].checks[d];save();}
+
+function renderHabits(){
+  habitTable.innerHTML="";
+  let h="<tr><th>Habit</th>";
+  for(let d=1;d<=DAYS;d++){
+    const sep=new Date(Y,M,d).getDay()===0;
+    h+=`<th class="${sep?'week-sep':''}">${d}</th>`;
   }
+  h+="</tr>";
+  habitTable.innerHTML=h;
 
-  const now=new Date();
-  const y=now.getFullYear(), m=now.getMonth(), today=now.getDate();
-  const days=new Date(y,m+1,0).getDate();
-  const key=`tracker-${y}-${m}`;
-
-  let data=JSON.parse(localStorage.getItem(key))||{
-    habits:Array(5).fill().map(()=>({name:"",checks:{}})),
-    sleep:{}
-  };
-
-  function save(){localStorage.setItem(key,JSON.stringify(data));render();}
-
-  function addHabit(){data.habits.push({name:"",checks:{}});save();}
-  function removeHabit(i){data.habits.splice(i,1);save();}
-  function toggleHabit(i,d){data.habits[i].checks[d]=!data.habits[i].checks[d];save();}
-
-  function renderHabits(){
-    habitTable.innerHTML="";
-    let head="<tr><th>Habit</th>";
-    for(let d=1;d<=days;d++){
-      const sep=new Date(y,m,d).getDay()===0;
-      head+=`<th class="${sep?'week-sep':''}">${d}</th>`;
-    }
-    head+="</tr>";
-    habitTable.innerHTML=head;
-
-    let done=0;
-    data.habits.forEach((h,i)=>{
-      let row=`<tr><td>
-        <input class="inline" placeholder="Enter habit"
-        value="${h.name}"
-        oninput="data.habits[${i}].name=this.value;save()">
-        <span class="remove-btn" onclick="removeHabit(${i})">×</span>
-      </td>`;
-      for(let d=1;d<=days;d++){
-        const isToday=d===today;
-        const sep=new Date(y,m,d).getDay()===0;
-        if(isToday&&h.checks[d])done++;
-        row+=`<td class="cell ${isToday?'today':'locked'} ${sep?'week-sep':''}"
+  let done=0;
+  data.habits.forEach((hb,i)=>{
+    let r=`<tr><td>
+      <input class="inline" placeholder="Enter habit"
+      value="${hb.name}"
+      oninput="data.habits[${i}].name=this.value;save()">
+    </td>`;
+    for(let d=1;d<=DAYS;d++){
+      const isToday=d===TODAY;
+      const sep=new Date(Y,M,d).getDay()===0;
+      if(isToday&&hb.checks[d])done++;
+      r+=`<td class="cell ${isToday?'today':'locked'} ${sep?'week-sep':''}"
         onclick="${isToday?`toggleHabit(${i},${d})`:''}">
-        ${h.checks[d]?'✔':''}</td>`;
-      }
-      row+="</tr>";
-      habitTable.innerHTML+=row;
-    });
-    todayProgress.innerText=`Today: ${done}/${data.habits.length} completed`;
-  }
+        ${hb.checks[d]?'✔':''}
+      </td>`;
+    }
+    r+="</tr>";
+    habitTable.innerHTML+=r;
+  });
+  todayProgress.innerText=`Today: ${done}/${data.habits.length}`;
+}
 
-  function saveSleep(){
-    const s=sleepStart.value,e=sleepEnd.value;
-    if(!s||!e)return;
-    let a=new Date(`1970-01-01T${s}`);
-    let b=new Date(`1970-01-01T${e}`);
-    if(b<a)b.setDate(b.getDate()+1);
-    const hrs=+((b-a)/36e5).toFixed(1);
-    data.sleep[today]=hrs;
-    sleepValue.innerText=`${hrs} hrs slept`;
-    save();
-  }
+/* -------- SLEEP -------- */
+function saveSleep(){
+  const s=sleepStart.value,e=sleepEnd.value;
+  if(!s||!e)return;
+  let a=new Date(`1970-01-01T${s}`);
+  let b=new Date(`1970-01-01T${e}`);
+  if(b<a)b.setDate(b.getDate()+1);
+  const hrs=+((b-a)/36e5).toFixed(1);
+  data.sleep[dateKey(TODAY)]=hrs;
+  sleepValue.innerText=`${hrs} hrs slept`;
+  save();
+}
 
-  function renderSleepTable(){
-    sleepTable.innerHTML="<tr><th>Day</th><th>Hrs</th></tr>";
-    for(let d=1;d<=days;d++){
-      sleepTable.innerHTML+=`<tr><td>${d}</td><td>${data.sleep[d]||""}</td></tr>`;
+function renderSleep(){
+  sleepTable.innerHTML="<tr><th>Date</th><th>Hrs</th></tr>";
+  let keys=[];
+  for(let d=1;d<=DAYS;d++){
+    const k=dateKey(d);
+    if(data.sleep[k]!=null){
+      sleepTable.innerHTML+=`<tr><td>${k}</td><td>${data.sleep[k]}</td></tr>`;
+      keys.push(k);
     }
   }
 
-  function renderGraph(){
-    const svg=sleepGraph;
-    svg.innerHTML="";
-    const w=svg.clientWidth,h=svg.clientHeight,p=20,maxH=10;
-    let pts=[];
-    for(let d=1;d<=days;d++){
-      if(data.sleep[d]!=null){
-        pts.push({
-          x:p+(d-1)*(w-2*p)/(days-1),
-          y:h-p-(data.sleep[d]/maxH)*(h-2*p)
-        });
-      }
-    }
-    svg.innerHTML+=`<line x1="${p}" y1="${p}" x2="${p}" y2="${h-p}" stroke="currentColor"/>`;
-    svg.innerHTML+=`<line x1="${p}" y1="${h-p}" x2="${w-p}" y2="${h-p}" stroke="currentColor"/>`;
-    if(pts.length>1)
-      svg.innerHTML+=`<polyline points="${pts.map(p=>`${p.x},${p.y}`).join(" ")}"
-      fill="none" stroke="currentColor"/>`;
-    pts.forEach(p=>svg.innerHTML+=`<circle cx="${p.x}" cy="${p.y}" r="3" fill="currentColor"/>`);
-  }
+  sleepGraph.innerHTML="";
+  if(keys.length<1)return;
+  const w=sleepGraph.clientWidth,h=sleepGraph.clientHeight,p=20;
+  const maxH=10;
+  let pts=keys.map((k,i)=>({
+    x:p+i*(w-2*p)/(keys.length-1||1),
+    y:h-p-(data.sleep[k]/maxH)*(h-2*p)
+  }));
 
-  function showRecap(){
-    let total=0,done=0;
-    data.habits.forEach(h=>{for(let d in h.checks){total++;if(h.checks[d])done++;}});
-    let s=Object.values(data.sleep);
-    let avg=s.length?(s.reduce((a,b)=>a+b,0)/s.length).toFixed(1):"-";
-    recap.innerText=`Completion ${Math.round(done/total*100)||0}% | Avg sleep ${avg} hrs`;
-  }
+  sleepGraph.innerHTML+=`<line x1="${p}" y1="${p}" x2="${p}" y2="${h-p}" stroke="currentColor"/>`;
+  sleepGraph.innerHTML+=`<line x1="${p}" y1="${h-p}" x2="${w-p}" y2="${h-p}" stroke="currentColor"/>`;
+  if(pts.length>1)
+    sleepGraph.innerHTML+=`<polyline points="${pts.map(p=>`${p.x},${p.y}`).join(" ")}" fill="none" stroke="currentColor"/>`;
+  pts.forEach(p=>sleepGraph.innerHTML+=`<circle cx="${p.x}" cy="${p.y}" r="3" fill="currentColor"/>`);
+}
 
-  function tick(){
-    dateTime.innerText=
-      new Date().toLocaleDateString()+" "+
-      new Date().toLocaleTimeString([],{
-        hour:'numeric',minute:'2-digit',second:'2-digit',hour12:true
-      });
-  }
+/* -------- CLOCK -------- */
+setInterval(()=>{
+  dateTime.innerText=new Date().toLocaleDateString()+" "+
+  new Date().toLocaleTimeString([],{
+    hour:'numeric',minute:'2-digit',second:'2-digit',hour12:true
+  });
+},1000);
 
-  addHabitBtn.onclick=addHabit;
-  saveSleepBtn.onclick=saveSleep;
-  recapBtn.onclick=showRecap;
-
-  setInterval(tick,1000);
-  tick();
-
-  function render(){renderHabits();renderSleepTable();renderGraph();}
-  render();
-});
+function render(){renderHabits();renderSleep();}
+render();
 </script>
 
 </body>
