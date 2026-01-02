@@ -178,7 +178,8 @@ function habitTyping(index, value){
 
 function commitHabit(index, value){
   data.habits[index].name = value;
-  save();
+  localStorage.setItem(KEY, JSON.stringify(data));
+  // ❌ NO render() here
 }
 function toggleHabit(i,d){
   if(d!==TODAY) return; // 🔒 past + future locked
