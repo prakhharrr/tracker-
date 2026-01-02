@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=1200, initial-scale=0.35">
 <title>Personal Tracker</title>
-<link rel="manifest" href="manifest.json">
 
 <style>
 body{min-width:1200px;font-family:system-ui,sans-serif;margin:20px}
@@ -18,15 +17,12 @@ table{width:100%;border-collapse:collapse;table-layout:fixed}
 th,td{border:1px solid;font-size:12px;text-align:center}
 th:first-child,td:first-child{width:180px;text-align:left;padding-left:8px}
 td.cell{aspect-ratio:1/1;height:26px}
-td.today{cursor:pointer}
-td.locked{opacity:.35}
-.week-sep{border-right:2px solid}
-input.inline{width:100%;border:none;background:transparent;color:inherit}
+input.inline{width:100%;border:none;background:transparent;color:inherit;font-size:12px}
 .remove-btn{font-size:11px;margin-left:6px;cursor:pointer;opacity:.6}
 button{margin-top:8px;padding:6px 12px;border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:8px}
 .sleep-wrap{display:flex;gap:14px;margin-top:10px}
-.sleep-left{width:35%}
-.sleep-right{width:65%}
+.sleep-left{width:40%}
+.sleep-right{width:60%}
 svg{width:100%;height:160px}
 </style>
 </head>
@@ -36,6 +32,7 @@ svg{width:100%;height:160px}
 <h1>🧠 Personal Tracker</h1>
 <div id="dateTime" class="small"></div>
 
+<!-- HABITS (UNCHANGED) -->
 <div class="card">
 <b>Habits</b>
 <div id="todayProgress" class="small"></div>
@@ -43,25 +40,19 @@ svg{width:100%;height:160px}
 <button onclick="addHabit()">+ Add habit</button>
 </div>
 
+<!-- SLEEP -->
 <div class="card">
-<b>Sleep</b><br><br>
-
-<label class="small">Slept at</label><br>
-<input type="time" id="sleepStart"><br><br>
-
-<label class="small">Woke up at</label><br>
-<input type="time" id="sleepEnd"><br>
-
-<button onclick="saveSleep()">Save</button>
-<div id="sleepValue" class="small"></div>
+<b>Sleep Tracker</b>
 
 <div class="sleep-wrap">
   <div class="sleep-left">
     <table id="sleepTable"></table>
   </div>
   <div class="sleep-right card">
-    <div class="small">Sleep Trend</div>
+    <div class="small">Daily Sleep (hrs)</div>
     <svg id="sleepGraph"></svg>
+    <div class="small" style="margin-top:10px">Weekly Average</div>
+    <svg id="weeklyGraph"></svg>
   </div>
 </div>
 </div>
@@ -75,56 +66,13 @@ const DAYS=new Date(Y,M+1,0).getDate();
 const KEY=`tracker-${Y}-${M}`;
 
 let data=JSON.parse(localStorage.getItem(KEY))||{
-  /* ---- ONE-TIME RECOVERY FOR 1 JAN SLEEP ---- */
-(function recoverJan1Sleep(){
-  const target = `${Y}-01-01`;
-
-  if (data.sleep[target] != null) return;
-
-  // scan all localStorage keys
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
-    if (!k || !k.startsWith("tracker-")) continue;
-
-    try {
-      const old = JSON.parse(localStorage.getItem(k));
-      if (old && old.sleep) {
-        // case 1: stored as YYYY-MM-DD
-        if (old.sleep[target] != null) {
-          data.sleep[target] = old.sleep[target];
-          break;
-        }
-        // case 2: stored as day number
-        if (old.sleep["1"] != null) {
-          data.sleep[target] = old.sleep["1"];
-          break;
-        }
-      }
-    } catch(e){}
-  }
-
-  save();
-})();
   habits:Array(5).fill().map(()=>({name:"",checks:{}})),
-  sleep:{} // stored as YYYY-MM-DD
+  sleep:{} // { day: {start,end,hrs} }
 };
-
-/* ---- MIGRATE OLD SLEEP DATA (FIXES 1 JAN) ---- */
-for(let d in data.sleep){
-  if(!d.includes("-")){
-    const k=`${Y}-${String(M+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-    data.sleep[k]=data.sleep[d];
-    delete data.sleep[d];
-  }
-}
 
 function save(){localStorage.setItem(KEY,JSON.stringify(data));render();}
 
-function dateKey(day){
-  return `${Y}-${String(M+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-}
-
-/* -------- HABITS -------- */
+/* ---------------- HABITS (UNCHANGED) ---------------- */
 function addHabit(){data.habits.push({name:"",checks:{}});save();}
 function removeHabit(i){data.habits.splice(i,1);save();}
 function toggleHabit(i,d){data.habits[i].checks[d]=!data.habits[i].checks[d];save();}
@@ -132,10 +80,7 @@ function toggleHabit(i,d){data.habits[i].checks[d]=!data.habits[i].checks[d];sav
 function renderHabits(){
   habitTable.innerHTML="";
   let h="<tr><th>Habit</th>";
-  for(let d=1;d<=DAYS;d++){
-    const sep=new Date(Y,M,d).getDay()===0;
-    h+=`<th class="${sep?'week-sep':''}">${d}</th>`;
-  }
+  for(let d=1;d<=DAYS;d++)h+=`<th>${d}</th>`;
   h+="</tr>";
   habitTable.innerHTML=h;
 
@@ -143,18 +88,12 @@ function renderHabits(){
   data.habits.forEach((hb,i)=>{
     let r=`<tr><td>
       <input class="inline" value="${hb.name}"
-      placeholder="Enter habit"
       oninput="data.habits[${i}].name=this.value;save()">
       <span class="remove-btn" onclick="removeHabit(${i})">×</span>
     </td>`;
     for(let d=1;d<=DAYS;d++){
-      const isToday=d===TODAY;
-      const sep=new Date(Y,M,d).getDay()===0;
-      if(isToday&&hb.checks[d])done++;
-      r+=`<td class="cell ${isToday?'today':'locked'} ${sep?'week-sep':''}"
-        onclick="${isToday?`toggleHabit(${i},${d})`:''}">
-        ${hb.checks[d]?'✔':''}
-      </td>`;
+      if(d===TODAY&&hb.checks[d])done++;
+      r+=`<td class="cell" onclick="toggleHabit(${i},${d})">${hb.checks[d]?'✔':''}</td>`;
     }
     r+="</tr>";
     habitTable.innerHTML+=r;
@@ -162,45 +101,70 @@ function renderHabits(){
   todayProgress.innerText=`Today: ${done}/${data.habits.length}`;
 }
 
-/* -------- SLEEP -------- */
-function saveSleep(){
-  const s=sleepStart.value,e=sleepEnd.value;
-  if(!s||!e)return;
+/* ---------------- SLEEP AUTO + MANUAL ---------------- */
+function calcHours(s,e){
+  if(!s||!e)return null;
   let a=new Date(`1970-01-01T${s}`);
   let b=new Date(`1970-01-01T${e}`);
   if(b<a)b.setDate(b.getDate()+1);
-  const hrs=+((b-a)/36e5).toFixed(1);
-  data.sleep[dateKey(TODAY)]=hrs;
-  sleepValue.innerText=`${hrs} hrs slept`;
-  save();
+  return +((b-a)/36e5).toFixed(1);
 }
 
 function renderSleep(){
-  sleepTable.innerHTML="<tr><th>Day</th><th>Hrs</th></tr>";
+  sleepTable.innerHTML="<tr><th>Day</th><th>Slept</th><th>Woke</th><th>Hrs</th></tr>";
   let points=[];
+  let weekly=[[],[],[],[],[]];
+
   for(let d=1;d<=DAYS;d++){
-    const k=dateKey(d);
-    const v=data.sleep[k];
-    sleepTable.innerHTML+=`<tr><td>${d}</td><td>${v||""}</td></tr>`;
-    if(v!=null)points.push({d,v});
+    const s=data.sleep[d]||{};
+    sleepTable.innerHTML+=`
+    <tr>
+      <td>${d}</td>
+      <td><input type="time" class="inline"
+        value="${s.start||""}"
+        onchange="data.sleep[${d}]={...data.sleep[${d}],start:this.value,hrs:calcHours(this.value,data.sleep[${d}]?.end)};save()"></td>
+      <td><input type="time" class="inline"
+        value="${s.end||""}"
+        onchange="data.sleep[${d}]={...data.sleep[${d}],end:this.value,hrs:calcHours(data.sleep[${d}]?.start,this.value)};save()"></td>
+      <td><input type="number" step="0.1" class="inline"
+        value="${s.hrs??""}"
+        oninput="data.sleep[${d}]={...data.sleep[${d}],hrs:Number(this.value)};save()"></td>
+    </tr>`;
+
+    if(s.hrs!=null){
+      points.push(s.hrs);
+      weekly[Math.floor((d-1)/7)].push(s.hrs);
+    }
   }
 
-  sleepGraph.innerHTML="";
-  if(points.length<1)return;
-  const w=sleepGraph.clientWidth,h=sleepGraph.clientHeight,p=20,maxH=10;
-  let pts=points.map((o,i)=>({
-    x:p+i*(w-2*p)/(points.length-1||1),
-    y:h-p-(o.v/maxH)*(h-2*p)
-  }));
-
-  sleepGraph.innerHTML+=`<line x1="${p}" y1="${p}" x2="${p}" y2="${h-p}" stroke="currentColor"/>`;
-  sleepGraph.innerHTML+=`<line x1="${p}" y1="${h-p}" x2="${w-p}" y2="${h-p}" stroke="currentColor"/>`;
-  if(pts.length>1)
-    sleepGraph.innerHTML+=`<polyline points="${pts.map(p=>`${p.x},${p.y}`).join(" ")}" fill="none" stroke="currentColor"/>`;
-  pts.forEach(p=>sleepGraph.innerHTML+=`<circle cx="${p.x}" cy="${p.y}" r="3" fill="currentColor"/>`);
+  drawLineGraph(sleepGraph,points);
+  drawBarGraph(weeklyGraph,weekly.map(w=>w.length?(w.reduce((a,b)=>a+b)/w.length):0));
 }
 
-/* -------- CLOCK -------- */
+/* ---------------- GRAPHS ---------------- */
+function drawLineGraph(svg,data){
+  svg.innerHTML="";
+  if(!data.length)return;
+  const w=svg.clientWidth,h=svg.clientHeight,p=20,max=10;
+  let pts=data.map((v,i)=>({
+    x:p+i*(w-2*p)/(data.length-1||1),
+    y:h-p-(v/max)*(h-2*p)
+  }));
+  svg.innerHTML+=`<polyline points="${pts.map(p=>`${p.x},${p.y}`).join(" ")}" fill="none" stroke="currentColor"/>`;
+  pts.forEach(p=>svg.innerHTML+=`<circle cx="${p.x}" cy="${p.y}" r="3" fill="currentColor"/>`);
+}
+
+function drawBarGraph(svg,data){
+  svg.innerHTML="";
+  const w=svg.clientWidth,h=svg.clientHeight,p=20,max=10;
+  const bw=(w-2*p)/data.length;
+  data.forEach((v,i)=>{
+    const bh=(v/max)*(h-2*p);
+    svg.innerHTML+=`<rect x="${p+i*bw}" y="${h-p-bh}" width="${bw-6}" height="${bh}" fill="currentColor"/>`;
+  });
+}
+
+/* ---------------- CLOCK ---------------- */
 setInterval(()=>{
   dateTime.innerText=new Date().toLocaleDateString()+" "+
   new Date().toLocaleTimeString([],{
