@@ -35,7 +35,7 @@ svg{width:100%;height:160px}
 <h1>🧠 Personal Tracker</h1>
 <div id="dateTime" class="small"></div>
 
-<!-- HABITS (TODAY ONLY — UNCHANGED LOGIC) -->
+<!-- HABITS -->
 <div class="card">
 <b>Habits</b>
 <div id="todayProgress" class="small"></div>
@@ -43,10 +43,9 @@ svg{width:100%;height:160px}
 <button onclick="addHabit()">+ Add habit</button>
 </div>
 
-<!-- SLEEP (ANY DAY EDITABLE) -->
+<!-- SLEEP -->
 <div class="card">
 <b>Sleep Tracker</b>
-
 <div class="sleep-wrap">
   <div class="sleep-left">
     <table id="sleepTable"></table>
@@ -54,7 +53,7 @@ svg{width:100%;height:160px}
   <div class="sleep-right card">
     <div class="small">Daily Sleep (hrs)</div>
     <svg id="sleepGraph"></svg>
-    <div class="small" style="margin-top:10px">Weekly Average</div>
+    <div class="small" style="margin-top:10px">Weekly Breakdown</div>
     <svg id="weeklyGraph"></svg>
   </div>
 </div>
@@ -79,7 +78,7 @@ function save(){localStorage.setItem(KEY,JSON.stringify(data));render();}
 function addHabit(){data.habits.push({name:"",checks:{}});save();}
 function removeHabit(i){data.habits.splice(i,1);save();}
 function toggleHabit(i,d){
-  if(d!==TODAY) return; // 🔒 hard lock
+  if(d!==TODAY)return;
   data.habits[i].checks[d]=!data.habits[i].checks[d];
   save();
 }
@@ -97,7 +96,7 @@ function renderHabits(){
   let done=0;
   data.habits.forEach((hb,i)=>{
     let r=`<tr><td>
-      <input class="inline" value="${hb.name}"
+      <input class="inline" value="${hb.name}" placeholder="Enter habit"
       oninput="data.habits[${i}].name=this.value;save()">
       <span class="remove-btn" onclick="removeHabit(${i})">×</span>
     </td>`;
@@ -106,9 +105,7 @@ function renderHabits(){
       const sep=new Date(Y,M,d).getDay()===0;
       if(isToday&&hb.checks[d])done++;
       r+=`<td class="cell ${isToday?'today':'locked'} ${sep?'week-sep':''}"
-        onclick="toggleHabit(${i},${d})">
-        ${hb.checks[d]?'✔':''}
-      </td>`;
+        onclick="toggleHabit(${i},${d})">${hb.checks[d]?'✔':''}</td>`;
     }
     r+="</tr>";
     habitTable.innerHTML+=r;
@@ -116,7 +113,7 @@ function renderHabits(){
   todayProgress.innerText=`Today: ${done}/${data.habits.length}`;
 }
 
-/* ---------------- SLEEP (ANY DAY EDITABLE) ---------------- */
+/* ---------------- SLEEP ---------------- */
 function calcHours(s,e){
   if(!s||!e)return null;
   let a=new Date(`1970-01-01T${s}`);
@@ -127,6 +124,7 @@ function calcHours(s,e){
 
 function renderSleep(){
   sleepTable.innerHTML="<tr><th>Day</th><th>Slept</th><th>Woke</th><th>Hrs</th></tr>";
+
   let daily=[];
   let weekly=[[],[],[],[],[]];
 
@@ -135,47 +133,80 @@ function renderSleep(){
     sleepTable.innerHTML+=`
     <tr>
       <td>${d}</td>
-      <td><input type="time" class="inline"
-        value="${s.start||""}"
+      <td><input type="time" class="inline" value="${s.start||""}"
         onchange="data.sleep[${d}]={...data.sleep[${d}],start:this.value,hrs:calcHours(this.value,data.sleep[${d}]?.end)};save()"></td>
-      <td><input type="time" class="inline"
-        value="${s.end||""}"
+      <td><input type="time" class="inline" value="${s.end||""}"
         onchange="data.sleep[${d}]={...data.sleep[${d}],end:this.value,hrs:calcHours(data.sleep[${d}]?.start,this.value)};save()"></td>
-      <td><input type="number" step="0.1" class="inline"
-        value="${s.hrs??""}"
+      <td><input type="number" step="0.1" class="inline" value="${s.hrs??""}"
         oninput="data.sleep[${d}]={...data.sleep[${d}],hrs:Number(this.value)};save()"></td>
     </tr>`;
 
     if(s.hrs!=null){
-      daily.push(s.hrs);
-      weekly[Math.floor((d-1)/7)].push(s.hrs);
+      daily.push({hrs:s.hrs,label:`${d} Jan`});
+      weekly[Math.floor((d-1)/7)].push({hrs:s.hrs,label:`${d} Jan`});
     }
   }
 
-  drawLine(sleepGraph,daily);
-  drawBars(weeklyGraph,weekly.map(w=>w.length?(w.reduce((a,b)=>a+b)/w.length):0));
+  drawDailyGraph(daily);
+  drawWeeklyPies(weekly);
 }
 
-/* ---------------- GRAPHS ---------------- */
-function drawLine(svg,data){
-  svg.innerHTML="";
+/* ---------------- DAILY GRAPH ---------------- */
+function drawDailyGraph(data){
+  sleepGraph.innerHTML="";
   if(!data.length)return;
-  const w=svg.clientWidth,h=svg.clientHeight,p=20,max=10;
-  let pts=data.map((v,i)=>({
+  const w=sleepGraph.clientWidth,h=sleepGraph.clientHeight,p=30;
+  const max=Math.max(...data.map(d=>d.hrs),10);
+
+  sleepGraph.innerHTML+=`
+    <line x1="${p}" y1="${p}" x2="${p}" y2="${h-p}" stroke="currentColor"/>
+    <line x1="${p}" y1="${h-p}" x2="${w-p}" y2="${h-p}" stroke="currentColor"/>
+  `;
+
+  // goal line (8 hrs)
+  const gy=h-p-(8/max)*(h-2*p);
+  sleepGraph.innerHTML+=`<line x1="${p}" y1="${gy}" x2="${w-p}" y2="${gy}" stroke="red" stroke-dasharray="4"/>`;
+
+  let pts=data.map((d,i)=>({
     x:p+i*(w-2*p)/(data.length-1||1),
-    y:h-p-(v/max)*(h-2*p)
+    y:h-p-(d.hrs/max)*(h-2*p)
   }));
-  svg.innerHTML+=`<polyline points="${pts.map(p=>`${p.x},${p.y}`).join(" ")}" fill="none" stroke="currentColor"/>`;
-  pts.forEach(p=>svg.innerHTML+=`<circle cx="${p.x}" cy="${p.y}" r="3" fill="currentColor"/>`);
+
+  sleepGraph.innerHTML+=`<polyline points="${pts.map(p=>`${p.x},${p.y}`).join(" ")}"
+    fill="none" stroke="currentColor"/>`;
+
+  pts.forEach(p=>sleepGraph.innerHTML+=`<circle cx="${p.x}" cy="${p.y}" r="3" fill="currentColor"/>`);
 }
 
-function drawBars(svg,data){
-  svg.innerHTML="";
-  const w=svg.clientWidth,h=svg.clientHeight,p=20,max=10;
-  const bw=(w-2*p)/data.length;
-  data.forEach((v,i)=>{
-    const bh=(v/max)*(h-2*p);
-    svg.innerHTML+=`<rect x="${p+i*bw}" y="${h-p-bh}" width="${bw-6}" height="${bh}" fill="currentColor"/>`;
+/* ---------------- WEEKLY PIE CHARTS ---------------- */
+function drawWeeklyPies(weeks){
+  weeklyGraph.innerHTML="";
+  const size=110,r=40,cx=55,cy=55;
+  const colors=["#6aa6ff","#9cc2ff","#c4dbff","#88b4ff","#4f8cff","#b3ceff","#7aa2ff"];
+
+  weeks.forEach((week,wi)=>{
+    if(!week.length)return;
+    let total=week.reduce((a,b)=>a+b.hrs,0);
+    let angle=0;
+    const g=document.createElementNS("http://www.w3.org/2000/svg","g");
+    g.setAttribute("transform",`translate(${wi*(size+20)},0)`);
+
+    week.forEach((d,i)=>{
+      const slice=(d.hrs/total)*Math.PI*2;
+      const x1=cx+r*Math.cos(angle),y1=cy+r*Math.sin(angle);
+      angle+=slice;
+      const x2=cx+r*Math.cos(angle),y2=cy+r*Math.sin(angle);
+      const large=slice>Math.PI?1:0;
+
+      g.innerHTML+=`
+      <path d="M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z"
+        fill="${colors[i%colors.length]}">
+        <title>${d.label}: ${d.hrs} hrs</title>
+      </path>`;
+    });
+
+    g.innerHTML+=`<text x="${cx-18}" y="${size-5}" font-size="10">Week ${wi+1}</text>`;
+    weeklyGraph.appendChild(g);
   });
 }
 
