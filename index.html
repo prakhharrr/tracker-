@@ -199,12 +199,15 @@ function renderHabits(){
   let done=0;
   data.habits.forEach((hb,i)=>{
     let r=`<tr><td>
-      <input class="inline" value="${hb.name}" placeholder="Enter habit"
-  oninput="habitTyping(${i}, this.value)"
-  onkeydown="if(event.key==='Enter'){this.blur()}"
-  onblur="commitHabit(${i}, this.value)">
-      <span class="remove-btn" onclick="removeHabit(${i})">×</span>
-    </td>`;
+  <input class="inline" value="${hb.name}" placeholder="Enter habit"
+    oninput="habitTyping(${i}, this.value)"
+    onkeydown="if(event.key==='Enter'){this.blur()}"
+    onblur="commitHabit(${i}, this.value)">
+
+  <span class="remove-btn" onclick="removeHabit(${i})">×</span>
+  <span class="remove-btn" onclick="moveHabit(${i}, -1)">⬆️</span>
+  <span class="remove-btn" onclick="moveHabit(${i}, 1)">⬇️</span>
+</td>`;
     for(let d=1;d<=DAYS;d++){
       const sep=new Date(Y,M,d).getDay()===0;
       if(d===TODAY&&hb.checks[d])done++;
@@ -215,7 +218,16 @@ function renderHabits(){
   });
   todayProgress.innerText=`Today: ${done}/${data.habits.length}`;
 }
+function moveHabit(index, direction){
+  const newIndex = index + direction;
+  if(newIndex < 0 || newIndex >= data.habits.length) return;
 
+  const temp = data.habits[index];
+  data.habits[index] = data.habits[newIndex];
+  data.habits[newIndex] = temp;
+
+  save();
+        }
 /* ---------- SLEEP ---------- */
 function calcHours(s,e){
   if(!s||!e)return null;
