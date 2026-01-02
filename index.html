@@ -166,6 +166,20 @@ setInterval(()=>{
 /* ---------- HABITS (LOCKED) ---------- */
 function addHabit(){data.habits.push({name:"",checks:{}});save();}
 function removeHabit(i){data.habits.splice(i,1);save();}
+  // typing pause handler
+let habitTimers = {};
+
+function habitTyping(index, value){
+  clearTimeout(habitTimers[index]);
+  habitTimers[index] = setTimeout(()=>{
+  commitHabit(index, value);
+}, 50); // 50ms pause
+}
+
+function commitHabit(index, value){
+  data.habits[index].name = value;
+  save();
+}
 function toggleHabit(i,d){
   if(d!==TODAY) return; // 🔒 past + future locked
   data.habits[i].checks[d]=!data.habits[i].checks[d];
@@ -185,7 +199,9 @@ function renderHabits(){
   data.habits.forEach((hb,i)=>{
     let r=`<tr><td>
       <input class="inline" value="${hb.name}" placeholder="Enter habit"
-        oninput="data.habits[${i}].name=this.value;save()">
+  oninput="habitTyping(${i}, this.value)"
+  onkeydown="if(event.key==='Enter'){this.blur()}"
+  onblur="commitHabit(${i}, this.value)">
       <span class="remove-btn" onclick="removeHabit(${i})">×</span>
     </td>`;
     for(let d=1;d<=DAYS;d++){
