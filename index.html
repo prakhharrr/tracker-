@@ -31,6 +31,61 @@ button{margin-top:8px;padding:6px 12px;border:1px solid var(--accent);background
 .sleep-left{width:40%}
 .sleep-right{width:60%}
 svg{width:100%;height:220px}
+  #menuWrapper{
+  position:fixed;
+  top:12px;
+  right:14px;
+  z-index:999;
+}
+
+#menuBtn{
+  background:transparent;
+  border:none;
+  font-size:22px;
+  color:currentColor;
+  cursor:pointer;
+}
+
+#menuDropdown{
+  position:absolute;
+  right:0;
+  top:28px;
+  border:1px solid;
+  border-radius:8px;
+  min-width:140px;
+  background:inherit;
+  backdrop-filter:blur(6px);
+}
+
+.menu-item{
+  padding:8px 12px;
+  font-size:13px;
+  cursor:pointer;
+}
+
+.menu-item:hover{
+  background:rgba(127,127,127,0.15);
+}
+
+.hidden{
+  display:none;
+}
+  .has-sub{position:relative}
+.has-sub:hover .submenu{display:block}
+
+.submenu{
+  position:absolute;
+  right:100%;
+  top:0;
+  border:1px solid;
+  border-radius:8px;
+  min-width:180px;
+  background:inherit;
+}
+
+.submenu .menu-item{
+  white-space:nowrap;
+}
 </style>
 </head>
 
@@ -60,6 +115,25 @@ svg{width:100%;height:220px}
     <svg id="sleepGraph" width="700" height="220"></svg>
 
     <div class="small" style="margin-top:14px">Weekly Breakdown</div>
+    <!-- Three-dot menu -->
+<div id="menuWrapper">
+  <button id="menuBtn">⋮</button>
+
+  <div id="menuDropdown" class="hidden">
+    <div class="menu-item" id="recapBtn">Recap</div>
+
+    <div class="menu-item has-sub">
+      Reset ▸
+      <div class="submenu hidden">
+        <div class="menu-item" id="resetAll">Reset whole tracker</div>
+        <div class="menu-item" id="resetHabits">Reset habit tracker</div>
+        <div class="menu-item" id="resetSleep">Reset sleep tracker</div>
+      </div>
+    </div>
+
+    <div class="menu-item" id="aboutBtn">About</div>
+  </div>
+</div>
     <svg id="weeklyGraph" width="700" height="260"></svg>
   </div>
 </div>
@@ -249,7 +323,68 @@ function drawWeekly(weeks){
 
 /* ---------- RENDER ---------- */
 function render(){renderHabits();renderSleep();}
-render();
+render();/* ---------- MENU ACTIONS ---------- */
+
+// Recap
+document.getElementById("recapBtn").onclick = () => {
+  let habitDone = 0;
+  let habitTotal = data.habits.length;
+
+  data.habits.forEach(h=>{
+    if(h.checks[TODAY]) habitDone++;
+  });
+
+  let sleepToday = data.sleep[TODAY]?.hrs ?? "No data";
+
+  alert(
+    `📊 Recap (Today)\n\n` +
+    `Habits: ${habitDone}/${habitTotal}\n` +
+    `Sleep: ${sleepToday} hrs`
+  );
+};
+
+// Reset whole tracker
+document.getElementById("resetAll").onclick = () => {
+  if(confirm("Reset EVERYTHING? This cannot be undone.")){
+    localStorage.removeItem(KEY);
+    location.reload();
+  }
+};
+
+// Reset only habits
+document.getElementById("resetHabits").onclick = () => {
+  if(confirm("Reset only HABITS tracker?")){
+    data.habits = Array(5).fill().map(()=>({name:"",checks:{}}));
+    save();
+  }
+};
+
+// Reset only sleep
+document.getElementById("resetSleep").onclick = () => {
+  if(confirm("Reset only SLEEP tracker?")){
+    data.sleep = {};
+    save();
+  }
+};
+
+// About (simple placeholder)
+document.getElementById("aboutBtn").onclick = () => {
+  alert("Personal Tracker\nOffline • Local • Private");
+};
+  // Three-dot menu toggle
+const menuBtn = document.getElementById("menuBtn");
+const menuDropdown = document.getElementById("menuDropdown");
+
+menuBtn.addEventListener("click", ()=>{
+  menuDropdown.classList.toggle("hidden");
+});
+
+// close menu on outside click
+document.addEventListener("click",(e)=>{
+  if(!menuBtn.contains(e.target) && !menuDropdown.contains(e.target)){
+    menuDropdown.classList.add("hidden");
+  }
+});
 </script>
 
 </body>
