@@ -75,6 +75,36 @@ const DAYS=new Date(Y,M+1,0).getDate();
 const KEY=`tracker-${Y}-${M}`;
 
 let data=JSON.parse(localStorage.getItem(KEY))||{
+  /* ---- ONE-TIME RECOVERY FOR 1 JAN SLEEP ---- */
+(function recoverJan1Sleep(){
+  const target = `${Y}-01-01`;
+
+  if (data.sleep[target] != null) return;
+
+  // scan all localStorage keys
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!k || !k.startsWith("tracker-")) continue;
+
+    try {
+      const old = JSON.parse(localStorage.getItem(k));
+      if (old && old.sleep) {
+        // case 1: stored as YYYY-MM-DD
+        if (old.sleep[target] != null) {
+          data.sleep[target] = old.sleep[target];
+          break;
+        }
+        // case 2: stored as day number
+        if (old.sleep["1"] != null) {
+          data.sleep[target] = old.sleep["1"];
+          break;
+        }
+      }
+    } catch(e){}
+  }
+
+  save();
+})();
   habits:Array(5).fill().map(()=>({name:"",checks:{}})),
   sleep:{} // stored as YYYY-MM-DD
 };
