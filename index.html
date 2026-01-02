@@ -7,8 +7,14 @@
 
 <style>
 body{min-width:1200px;font-family:system-ui,sans-serif;margin:20px}
-@media (prefers-color-scheme: dark){body{background:#000;color:#fff}.card,table,th,td{border-color:#555}}
-@media (prefers-color-scheme: light){body{background:#fff;color:#000}.card,table,th,td{border-color:#000}}
+@media (prefers-color-scheme: dark){
+  body{background:#000;color:#fff}
+  .card,table,th,td{border-color:#555}
+}
+@media (prefers-color-scheme: light){
+  body{background:#fff;color:#000}
+  .card,table,th,td{border-color:#000}
+}
 :root{--accent:#6aa6ff}
 h1{color:var(--accent)}
 .small{font-size:12px;opacity:.7}
@@ -17,8 +23,6 @@ table{width:100%;border-collapse:collapse;table-layout:fixed}
 th,td{border:1px solid;font-size:12px;text-align:center}
 th:first-child,td:first-child{width:180px;text-align:left;padding-left:8px}
 td.cell{aspect-ratio:1/1;height:26px}
-td.today{cursor:pointer}
-td.locked{opacity:.35}
 .week-sep{border-right:2px solid}
 input.inline{width:100%;border:none;background:transparent;color:inherit;font-size:12px}
 .remove-btn{font-size:11px;margin-left:6px;cursor:pointer;opacity:.6}
@@ -52,10 +56,11 @@ svg{width:100%;height:220px}
   </div>
   <div class="sleep-right card">
     <div class="small">Daily Sleep (hrs)</div>
-    <svg id="sleepGraph"></svg>
+    <!-- FIX 1: real size -->
+    <svg id="sleepGraph" width="700" height="220"></svg>
 
     <div class="small" style="margin-top:14px">Weekly Breakdown</div>
-    <svg id="weeklyGraph" style="height:260px"></svg>
+    <svg id="weeklyGraph" width="700" height="260"></svg>
   </div>
 </div>
 </div>
@@ -84,11 +89,11 @@ setInterval(()=>{
   });
 },1000);
 
-/* ---------- HABITS ---------- */
+/* ---------- HABITS (LOCKED) ---------- */
 function addHabit(){data.habits.push({name:"",checks:{}});save();}
 function removeHabit(i){data.habits.splice(i,1);save();}
 function toggleHabit(i,d){
-  if(d !== TODAY) return;   // 🔒 lock past & future
+  if(d!==TODAY) return; // 🔒 past + future locked
   data.habits[i].checks[d]=!data.habits[i].checks[d];
   save();
 }
@@ -156,45 +161,53 @@ function renderSleep(){
   drawWeekly(weeks);
 }
 
-/* ---------- DAILY GRAPH (FIXED) ---------- */
+/* ---------- DAILY GRAPH (VISIBLE + THEME SAFE) ---------- */
 function drawDaily(data){
   sleepGraph.innerHTML="";
   if(!data.length)return;
 
-  const w = sleepGraph.clientWidth || 600; // 🔧 FIX
-  const h = sleepGraph.clientHeight || 220;
-  const p = 40;
-  const max = 10;
+  const w=sleepGraph.getAttribute("width");
+  const h=sleepGraph.getAttribute("height");
+  const p=40,max=10;
 
-  sleepGraph.innerHTML+=`<text x="10" y="${h/2}" font-size="11"
-    transform="rotate(-90 10 ${h/2})">Hours</text>`;
+  sleepGraph.innerHTML+=`
+    <text x="12" y="${h/2}" font-size="11"
+      transform="rotate(-90 12 ${h/2})" fill="currentColor">Hours</text>`;
 
   for(let i=5;i<=10;i++){
     let y=h-p-(i/max)*(h-2*p);
-    sleepGraph.innerHTML+=`<text x="22" y="${y+4}" font-size="10">${i}</text>`;
+    sleepGraph.innerHTML+=`
+      <text x="22" y="${y+4}" font-size="10" fill="currentColor">${i}</text>`;
   }
 
   data.forEach((d,i)=>{
     let x=p+i*(w-2*p)/(data.length-1||1);
-    sleepGraph.innerHTML+=`<text x="${x-12}" y="${h-18}" font-size="10">${d.label}</text>`;
+    sleepGraph.innerHTML+=`
+      <text x="${x-12}" y="${h-18}" font-size="10" fill="currentColor">${d.label}</text>`;
   });
 
-  sleepGraph.innerHTML+=`<text x="${w/2-15}" y="${h-2}" font-size="11">Date</text>`;
+  sleepGraph.innerHTML+=`
+    <text x="${w/2-15}" y="${h-2}" font-size="11" fill="currentColor">Date</text>`;
 
   let gy=h-p-(8/max)*(h-2*p);
-  sleepGraph.innerHTML+=`<line x1="${p}" y1="${gy}" x2="${w-p}" y2="${gy}"
-    stroke="red" stroke-dasharray="4"/>`;
+  sleepGraph.innerHTML+=`
+    <line x1="${p}" y1="${gy}" x2="${w-p}" y2="${gy}"
+      stroke="red" stroke-dasharray="4"/>`;
 
   let pts=data.map((d,i)=>({
     x:p+i*(w-2*p)/(data.length-1||1),
     y:h-p-(d.hrs/max)*(h-2*p)
   }));
-  sleepGraph.innerHTML+=`<polyline points="${pts.map(p=>`${p.x},${p.y}`).join(" ")}"
-    fill="none" stroke="currentColor"/>`;
-  pts.forEach(p=>sleepGraph.innerHTML+=`<circle cx="${p.x}" cy="${p.y}" r="3"/>`);
+  sleepGraph.innerHTML+=`
+    <polyline points="${pts.map(p=>`${p.x},${p.y}`).join(" ")}"
+      fill="none" stroke="currentColor"/>`;
+  pts.forEach(p=>{
+    sleepGraph.innerHTML+=`
+      <circle cx="${p.x}" cy="${p.y}" r="3" fill="currentColor"/>`;
+  });
 }
 
-/* ---------- WEEKLY PIE (AVG ADDED) ---------- */
+/* ---------- WEEKLY PIE (AVG + THEME SAFE) ---------- */
 function drawWeekly(weeks){
   weeklyGraph.innerHTML="";
   const size=150,r=55,cx=75,cy=75;
@@ -215,15 +228,19 @@ function drawWeekly(weeks){
       angle+=slice;
       let x2=cx+r*Math.cos(angle),y2=cy+r*Math.sin(angle);
       let large=slice>Math.PI?1:0;
-      g.innerHTML+=`<path d="M ${cx} ${cy} L ${x1} ${y1}
-        A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z"
-        fill="${colors[i%colors.length]}"/>`;
+      g.innerHTML+=`
+        <path d="M ${cx} ${cy} L ${x1} ${y1}
+          A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z"
+          fill="${colors[i%colors.length]}"/>`;
     });
 
     g.innerHTML+=`
-      <text x="${cx}" y="${cy-2}" text-anchor="middle" font-size="13">Avg</text>
-      <text x="${cx}" y="${cy+14}" text-anchor="middle" font-size="13">${avg}h</text>
-      <text x="${cx-55}" y="${size-6}" font-size="11">
+      <text x="${cx}" y="${cy-2}" text-anchor="middle"
+        font-size="13" fill="currentColor">Avg</text>
+      <text x="${cx}" y="${cy+14}" text-anchor="middle"
+        font-size="13" fill="currentColor">${avg}h</text>
+      <text x="${cx-55}" y="${size-6}" font-size="11"
+        fill="currentColor">
         Week ${wi+1} (${week[0].label} – ${week[week.length-1].label})
       </text>`;
     weeklyGraph.appendChild(g);
