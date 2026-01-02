@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -27,15 +26,16 @@ button{margin-top:8px;padding:6px 12px;border:1px solid var(--accent);background
 .sleep-wrap{display:flex;gap:14px;margin-top:10px}
 .sleep-left{width:40%}
 .sleep-right{width:60%}
-svg{width:100%;height:200px}
+svg{width:100%;height:220px}
 </style>
 </head>
 
 <body>
 
 <h1>🧠 Personal Tracker</h1>
-<div id="dateTime" class="small"></div>
+<div id="clock" class="small"></div>
 
+<!-- HABITS -->
 <div class="card">
 <b>Habits</b>
 <div id="todayProgress" class="small"></div>
@@ -43,6 +43,7 @@ svg{width:100%;height:200px}
 <button onclick="addHabit()">+ Add habit</button>
 </div>
 
+<!-- SLEEP -->
 <div class="card">
 <b>Sleep Tracker</b>
 <div class="sleep-wrap">
@@ -52,13 +53,15 @@ svg{width:100%;height:200px}
   <div class="sleep-right card">
     <div class="small">Daily Sleep (hrs)</div>
     <svg id="sleepGraph"></svg>
-    <div class="small" style="margin-top:12px">Weekly Breakdown</div>
-    <svg id="weeklyGraph" style="height:240px"></svg>
+
+    <div class="small" style="margin-top:14px">Weekly Breakdown</div>
+    <svg id="weeklyGraph" style="height:260px"></svg>
   </div>
 </div>
 </div>
 
 <script>
+/* ---------- DATE SETUP ---------- */
 const now=new Date();
 const Y=now.getFullYear();
 const M=now.getMonth();
@@ -66,12 +69,20 @@ const TODAY=now.getDate();
 const DAYS=new Date(Y,M+1,0).getDate();
 const KEY=`tracker-${Y}-${M}`;
 
+/* ---------- DATA ---------- */
 let data=JSON.parse(localStorage.getItem(KEY))||{
   habits:Array(5).fill().map(()=>({name:"",checks:{}})),
   sleep:{}
 };
-
 function save(){localStorage.setItem(KEY,JSON.stringify(data));render();}
+
+/* ---------- CLOCK ---------- */
+setInterval(()=>{
+  clock.innerText=new Date().toLocaleDateString()+" "+
+  new Date().toLocaleTimeString([],{
+    hour:'numeric',minute:'2-digit',second:'2-digit',hour12:true
+  });
+},1000);
 
 /* ---------- HABITS ---------- */
 function addHabit(){data.habits.push({name:"",checks:{}});save();}
@@ -91,7 +102,7 @@ function renderHabits(){
   data.habits.forEach((hb,i)=>{
     let r=`<tr><td>
       <input class="inline" value="${hb.name}" placeholder="Enter habit"
-      oninput="data.habits[${i}].name=this.value;save()">
+        oninput="data.habits[${i}].name=this.value;save()">
       <span class="remove-btn" onclick="removeHabit(${i})">×</span>
     </td>`;
     for(let d=1;d<=DAYS;d++){
@@ -119,9 +130,17 @@ function renderSleep(){
   sleepTable.innerHTML="<tr><th>Day</th><th>Slept</th><th>Woke</th><th>Hrs</th></tr>";
 
   let daily=[];
-  let weeks=[[],[],[],[],[]];
+  let weeks=[];
+  let weekIndex=0;
+  weeks[0]=[];
 
   for(let d=1;d<=DAYS;d++){
+    let date=new Date(Y,M,d);
+    if(date.getDay()===0 && d!==1){
+      weekIndex++;
+      weeks[weekIndex]=[];
+    }
+
     const s=data.sleep[d]||{};
     sleepTable.innerHTML+=`
     <tr>
@@ -136,9 +155,10 @@ function renderSleep(){
 
     if(s.hrs!=null){
       daily.push({hrs:s.hrs,label:`${d} Jan`});
-      weeks[Math.floor((d-1)/7)].push({hrs:s.hrs,label:`${d} Jan`});
+      weeks[weekIndex].push({hrs:s.hrs,label:`${d} Jan`});
     }
   }
+
   drawDaily(daily);
   drawWeekly(weeks);
 }
@@ -147,17 +167,23 @@ function renderSleep(){
 function drawDaily(data){
   sleepGraph.innerHTML="";
   if(!data.length)return;
-  const w=sleepGraph.clientWidth,h=sleepGraph.clientHeight,p=35;
+  const w=sleepGraph.clientWidth,h=sleepGraph.clientHeight,p=40;
   const max=Math.max(...data.map(d=>d.hrs),10);
 
-  sleepGraph.innerHTML+=`
-    <text x="4" y="${p-10}" font-size="11">hrs</text>
-    <text x="${w/2-40}" y="${h-4}" font-size="11">date</text>
-    <line x1="${p}" y1="${p}" x2="${p}" y2="${h-p}" stroke="currentColor"/>
-    <line x1="${p}" y1="${h-p}" x2="${w-p}" y2="${h-p}" stroke="currentColor"/>
-  `;
+  // Y ticks
+  for(let i=0;i<=10;i+=2){
+    let y=h-p-(i/max)*(h-2*p);
+    sleepGraph.innerHTML+=`<text x="6" y="${y+4}" font-size="10">${i}</text>`;
+  }
 
-  const gy=h-p-(8/max)*(h-2*p);
+  // X labels
+  data.forEach((d,i)=>{
+    let x=p+i*(w-2*p)/(data.length-1||1);
+    sleepGraph.innerHTML+=`<text x="${x-12}" y="${h-6}" font-size="10">${d.label}</text>`;
+  });
+
+  // goal line
+  let gy=h-p-(8/max)*(h-2*p);
   sleepGraph.innerHTML+=`<line x1="${p}" y1="${gy}" x2="${w-p}" y2="${gy}" stroke="red" stroke-dasharray="4"/>`;
 
   let pts=data.map((d,i)=>({
@@ -167,15 +193,14 @@ function drawDaily(data){
 
   sleepGraph.innerHTML+=`<polyline points="${pts.map(p=>`${p.x},${p.y}`).join(" ")}"
     fill="none" stroke="currentColor"/>`;
-
   pts.forEach(p=>sleepGraph.innerHTML+=`<circle cx="${p.x}" cy="${p.y}" r="3" fill="currentColor"/>`);
 }
 
 /* ---------- WEEKLY PIE ---------- */
 function drawWeekly(weeks){
   weeklyGraph.innerHTML="";
-  const size=140,r=55,cx=70,cy=70;
-  const palette=["#6aa6ff","#9cc2ff","#c4dbff","#88b4ff","#4f8cff","#b3ceff","#7aa2ff"];
+  const size=150,r=55,cx=75,cy=75;
+  const colors=["#ff6b6b","#feca57","#48dbfb","#1dd1a1","#5f27cd","#54a0ff","#c8d6e5"];
 
   weeks.forEach((week,wi)=>{
     if(!week.length)return;
@@ -186,35 +211,28 @@ function drawWeekly(weeks){
     g.setAttribute("transform",`translate(${wi*(size+30)},0)`);
 
     week.forEach((d,i)=>{
-      const slice=(d.hrs/total)*Math.PI*2;
-      const x1=cx+r*Math.cos(angle),y1=cy+r*Math.sin(angle);
+      let slice=(d.hrs/total)*Math.PI*2;
+      let x1=cx+r*Math.cos(angle),y1=cy+r*Math.sin(angle);
       angle+=slice;
-      const x2=cx+r*Math.cos(angle),y2=cy+r*Math.sin(angle);
-      const large=slice>Math.PI?1:0;
+      let x2=cx+r*Math.cos(angle),y2=cy+r*Math.sin(angle);
+      let large=slice>Math.PI?1:0;
 
       g.innerHTML+=`
       <path d="M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z"
-        fill="${palette[i%palette.length]}">
+        fill="${colors[i%colors.length]}">
         <title>${d.label}: ${d.hrs} hrs</title>
       </path>`;
     });
 
     g.innerHTML+=`
-      <text x="${cx-30}" y="${size-6}" font-size="11">
+      <text x="${cx-50}" y="${size-6}" font-size="11">
         Week ${wi+1} (${week[0].label} – ${week[week.length-1].label})
       </text>`;
     weeklyGraph.appendChild(g);
   });
 }
 
-/* ---------- CLOCK ---------- */
-setInterval(()=>{
-  dateTime.innerText=new Date().toLocaleDateString()+" "+
-  new Date().toLocaleTimeString([],{
-    hour:'numeric',minute:'2-digit',second:'2-digit',hour12:true
-  });
-},1000);
-
+/* ---------- RENDER ---------- */
 function render(){renderHabits();renderSleep();}
 render();
 </script>
